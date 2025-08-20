@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Brookhaven Clicker — 3D, Auto‑Save, Rebirths</title>
+<style>
+  :root{
+    --bg:#0f1220;
+    --panel:#171b2e;
+    --panel-2:#1e2340;
+    --accent:#6be675;
+    --accent-2:#9ea8ff;
+    --text:#e9ecff;
+    --muted:#9aa3c5;
+    --danger:#ff6473;
+    --gold:#ffd86b;
+    --vip:#ffb3f5;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    color:var(--text);
+    background:
+      radial-gradient(1200px 800px at 10% -10%, #293056 0%, transparent 60%),
+      radial-gradient(1200px 800px at 110% 10%, #22294a 0%, transparent 60%),
+      linear-gradient(180deg, #0c0f1c 0%, #0f1220 100%);
+    background-color:var(--bg);
+  }
+  .wrap{
+    max-width:1080px;
+    margin:0 auto;
+    padding:24px 16px 64px;
+  }
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:20px;
+  }
+  .title{
+    display:flex; align-items:center; gap:12px;
+  }
+  .logo{
+    width:42px; height:42px; border-radius:10px;
+    background: conic-gradient(from 210deg, #6be675, #9ea8ff, #ffd86b, #6be675);
+    filter: saturate(1.2);
+    position:relative;
+  }
+  .logo::after{
+    content:""; position:absolute; inset:4px; border-radius:8px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.15), rgba(0,0,0,0.3));
+  }
+  h1{font-size:20px; margin:0}
+  .save-indicator{
+    font-size:12px; color:var(--muted);
+  }
+  .save-indicator .dot{
+    display:inline-block; width:8px; height:8px; border-radius:50%; background:#888; margin-right:6px; vertical-align:middle;
+    box-shadow:0 0 0 0 rgba(107,230,117,0.7); transform:scale(1);
+    transition:all .25s ease;
+  }
+  .save-indicator.saved .dot{
+    background:var(--accent);
+    box-shadow:0 0 0 6px rgba(107,230,117,0.0);
+  }
+
+  .grid{
+    display:grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap:20px;
+  }
+  @media (max-width:960px){ .grid{grid-template-columns:1fr} }
+
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.35)),
+                linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid rgba(255,255,255,0.07);
+    border-radius:14px;
+    padding:16px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 10px 30px rgba(0,0,0,0.25);
+  }
+  .stats{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:12px;
+  }
+  @media (max-width:720px){ .stats{grid-template-columns: repeat(2, 1fr)} }
+  .stat{
+    background: rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.05);
+    border-radius:12px; padding:12px;
+  }
+  .stat .label{font-size:12px; color:var(--muted)}
+  .stat .value{font-size:20px; font-weight:700; margin-top:6px}
+
+  .scene-wrap{
+    display:grid; grid-template-columns: 1fr 320px; gap:16px; align-items:stretch;
+  }
+  @media (max-width:960px){ .scene-wrap{grid-template-columns:1fr} }
+
+  /* 3D Scene */
+  .scene{
+    height:360px; border-radius:16px; position:relative;
+    background:
+      radial-gradient(600px 200px at 50% 120%, rgba(110,230,125,0.15), rgba(255,255,255,0) 60%),
+      linear-gradient(180deg, #141a35, #0f1328);
+    border:1px solid rgba(255,255,255,0.06);
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+    perspective: 900px;
+  }
+  .ground{
+    position:absolute; bottom:-50px; width:120%; height:160px; left:-10%;
+    background: radial-gradient(60% 80% at 50% 30%, rgba(158,168,255,0.25), rgba(0,0,0,0) 70%);
+    transform: rotateX(70deg); filter: blur(6px);
+  }
+  .cube{
+    position:relative; width:160px; height:160px; transform-style:preserve-3d;
+    transform: rotateX(-22deg) rotateY(32deg);
+    transition: transform 300ms ease;
+  }
+  .cube.spin{ animation: spin 0.6s cubic-bezier(.2,.8,.2,1) }
+  @keyframes spin{
+    0%{ transform: rotateX(-22deg) rotateY(32deg) translateZ(0) }
+    30%{ transform: rotateX(-10deg) rotateY(70deg) translateZ(5px) }
+    100%{ transform: rotateX(-22deg) rotateY(32deg) translateZ(0) }
+  }
+  .face{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background: linear-gradient(180deg, #2a325f, #1d2447);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 12px 30px rgba(0,0,0,0.35);
+    font-weight:800; font-size:48px; color:#cfe6ff; text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+  .face.top{ transform: rotateX(90deg) translateZ(80px) }
+  .face.bottom{ transform: rotateX(-90deg) translateZ(80px) }
+  .face.right{ transform: rotateY(90deg) translateZ(80px) }
+  .face.left{ transform: rotateY(-90deg) translateZ(80px) }
+  .face.front{ transform: translateZ(80px) }
+  .face.back{ transform: rotateY(180deg) translateZ(80px) }
+  .glow{
+    position:absolute; inset:-40px; border-radius:16px;
+    background: radial-gradient(60% 60% at 50% 45%, rgba(107,230,117,0.15), rgba(255,255,255,0) 70%);
+    pointer-events:none;
+  }
+
+  .click-panel{
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .big-btn{
+    background: linear-gradient(180deg, #2a8f3e, #1d6a2f);
+    color:white; border:none; border-radius:12px; padding:14px 16px;
+    font-weight:800; font-size:18px; letter-spacing:.3px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+    cursor:pointer; transition: transform 80ms ease, filter .15s ease, box-shadow .2s ease;
+  }
+  .big-btn:hover{ filter:brightness(1.05) }
+  .big-btn:active{ transform: translateY(1px) }
+
+  .btn{
+    background: linear-gradient(180deg, #2b315c, #23284a);
+    color:var(--text); border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer;
+    transition: filter .15s ease, transform 80ms ease;
+  }
+  .btn:hover{ filter:brightness(1.05) }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; filter:none }
+
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .cost{ color:var(--muted); font-size:12px }
+  .mini{ font-size:12px; padding:6px 10px; border-radius:8px }
+  .danger{ background: linear-gradient(180deg, #8c2a3a, #6a1f2d); color:white; border-color: rgba(255,255,255,0.12) }
+  .accent{ background: linear-gradient(180deg, #3a4396, #2a316e); border-color: rgba(255,255,255,0.12) }
+  .gold{ background: linear-gradient(180deg, #b6922f, #8c6f20); color:#fff6da }
+  .vip{ background: linear-gradient(180deg, #b13fa2, #7f2e74); color:#ffe9fb }
+
+  .panel-title{ font-weight:800; letter-spacing:.3px; margin:0 0 10px 0; color:#dbe2ff }
+  .muted{ color:var(--muted); font-size:13px }
+
+  .shop-item{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.02); margin-bottom:8px;
+  }
+  .shop-item .left{ display:flex; flex-direction:column; gap:4px }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px;
+    background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+    font-size:12px; color:#e9ecff;
+  }
+  .badge.gold{ background: rgba(255,215,107,0.12); border-color: rgba(255,215,107,0.3); color:#ffe8a6 }
+  .badge.vip{ background: rgba(255,179,245,0.12); border-color: rgba(255,179,245,0.35); color:#ffd6fa }
+
+  footer{
+    margin-top:18px; font-size:12px; color:var(--muted);
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  }
+  .linklike{ color:#b9c2ff; text-decoration:underline; cursor:pointer }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <div class="logo"></div>
+        <div>
+          <h1>Brookhaven Clicker</h1>
+          <div class="muted">3D clicks. Auto‑save. Premium/VIP rebirths. No idle simulation.</div>
+        </div>
+      </div>
+      <div id="saveIndicator" class="save-indicator"><span class="dot"></span>Not saved</div>
+    </header>
+
+    <div class="card stats" aria-live="polite">
+      <div class="stat">
+        <div class="label">Cash</div>
+        <div id="money" class="value">$0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Click Power</div>
+        <div id="clickPower" class="value">1</div>
+      </div>
+      <div class="stat">
+        <div class="label">Multiplier</div>
+        <div id="multiplier" class="value">x1.00</div>
+      </div>
+      <div class="stat">
+        <div class="label">Rebirths</div>
+        <div id="rebirths" class="value">
+          <span class="badge gold">Premium: <b id="premCt">0</b></span>
+          <span class="badge vip">VIP: <b id="vipCt">0</b></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:18px">
+      <div class="card scene-wrap">
+        <div class="scene" id="scene">
+          <div class="glow"></div>
+          <div class="cube" id="cube" role="button" aria-label="Click to earn cash" tabindex="0">
+            <div class="face front">$</div>
+            <div class="face back">$</div>
+            <div class="face right">$</div>
+            <div class="face left">$</div>
+            <div class="face top">$</div>
+            <div class="face bottom">$</div>
+          </div>
+          <div class="ground"></div>
+        </div>
+
+        <div class="click-panel">
+          <button id="clickBtn" class="big-btn">Click! <span id="gainPerClick" style="opacity:.85;font-weight:700;margin-left:6px">+1</span></button>
+          <div class="card" style="padding:12px">
+            <div class="panel-title">Upgrades</div>
+            <div id="shop">
+              <!-- Shop items will be injected -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title">Rebirths</div>
+        <div class="muted" style="margin-bottom:10px">
+          Rebirth resets cash and upgrades but grants a permanent multiplier. VIP requires at least one Premium.
+        </div>
+
+        <div class="shop-item">
+          <div class="left">
+            <div><span class="badge gold">Premium Rebirth</span></div>
+            <div class="muted">+100% permanent multiplier each Premium (stacks). Resets cash and upgrades.</div>
+            <div class="cost" id="premCost">Cost: $50,000</div>
+          </div>
+          <div>
+            <button id="premBtn" class="btn gold">Rebirth: Premium</button>
+          </div>
+        </div>
+
+        <div class="shop-item">
+          <div class="left">
+            <div><span class="badge vip">VIP Rebirth</span></div>
+            <div class="muted">+300% permanent multiplier each VIP (stacks). Requires ≥1 Premium. Resets cash and upgrades.</div>
+            <div class="cost" id="vipCost">Cost: $1,000,000</div>
+          </div>
+          <div>
+            <button id="vipBtn" class="btn vip">Rebirth: VIP</button>
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <button id="saveBtn" class="btn mini accent">Save Now</button>
+          <button id="resetBtn" class="btn mini danger">Full Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div>Tip: Hit Space to click. Enter to upgrade. Everything saves automatically.</div>
+      <div id="version" class="muted">v1.0</div>
+    </footer>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  const SAVE_KEY = "bh_clicker_save_v1";
+  const VERSION = "1.0";
+
+  // Game State
+  const state = {
+    version: VERSION,
+    money: 0,
+    totalClicks: 0,
+    clickPowerLevel: 0,
+    baseClick: 1,
+    premium: 0,
+    vip: 0,
+    lastSavedAt: 0
+  };
+
+  // DOM
+  const el = {
+    money: document.getElementById("money"),
+    clickPower: document.getElementById("clickPower"),
+    multiplier: document.getElementById("multiplier"),
+    rebirths: document.getElementById("rebirths"),
+    premCt: document.getElementById("premCt"),
+    vipCt: document.getElementById("vipCt"),
+    premCost: document.getElementById("premCost"),
+    vipCost: document.getElementById("vipCost"),
+    premBtn: document.getElementById("premBtn"),
+    vipBtn: document.getElementById("vipBtn"),
+    clickBtn: document.getElementById("clickBtn"),
+    gainPerClick: document.getElementById("gainPerClick"),
+    saveBtn: document.getElementById("saveBtn"),
+    resetBtn: document.getElementById("resetBtn"),
+    shop: document.getElementById("shop"),
+    saveIndicator: document.getElementById("saveIndicator"),
+    cube: document.getElementById("cube"),
+    version: document.getElementById("version"),
+  };
+
+  el.version.textContent = "v" + VERSION;
+
+  // Formatting
+  function fmt(n){
+    if (n < 1000) return "$" + Math.floor(n);
+    const units = ["", "K", "M", "B", "T", "Qa", "Qi"];
+    let u = 0;
+    let v = n;
+    while (v >= 1000 && u < units.length-1) { v /= 1000; u++; }
+    return "$" + v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2) + units[u];
+  }
+
+  // Costs and multipliers
+  function clickPower() { return state.baseClick + state.clickPowerLevel; }
+  function totalMultiplier() {
+    // Each Premium adds +100% (x2 total per premium), each VIP adds +300% (x4 per vip) but additive style keeps it simple:
+    // We'll use additive into a single factor: 1 + 1*premium + 3*vip
+    return 1 + (1 * state.premium) + (3 * state.vip);
+  }
+  function gainPerClick() { return clickPower() * totalMultiplier(); }
+
+  function nextClickUpgradeCost(level){
+    // Base 25, +25 each level early, exponential tail
+    const base = 25;
+    const linear = base + level * 25;
+    const expo = Math.pow(1.18, level) * 10;
+    return Math.floor(linear + expo);
+  }
+
+  function premiumCost(){
+    // Scales by 10x each premium
+    return 50000 * Math.pow(10, state.premium);
+  }
+  function vipCost(){
+    // Scales by 10x each vip
+    return 1000000 * Math.pow(10, state.vip);
+  }
+
+  // Shop
+  const shopItems = [
+    {
+      id:"click+1",
+      name:"Increase Click Power",
+      desc:"Adds +1 to base click power.",
+      get level(){ return state.clickPowerLevel; },
+      price(){ return nextClickUpgradeCost(state.clickPowerLevel); },
+      canBuy(){ return state.money >= this.price(); },
+      buy(){
+        state.money -= this.price();
+        state.clickPowerLevel++;
+        pingSaved(false);
+        renderAll();
+      }
+    }
+  ];
+
+  function renderShop(){
+    el.shop.innerHTML = "";
+    shopItems.forEach(item => {
+      const wrap = document.createElement("div");
+      wrap.className = "shop-item";
+      wrap.innerHTML = `
+        <div class="left">
+          <div style="font-weight:800">${item.name}</div>
+          <div class="muted">${item.desc}</div>
+          <div class="cost">Level: <b>${item.level}</b> · Cost: ${fmt(item.price())}</div>
+        </div>
+        <div>
+          <button class="btn" data-id="${item.id}">Buy</button>
+        </div>
+      `;
+      const btn = wrap.querySelector("button");
+      btn.disabled = !item.canBuy();
+      btn.addEventListener("click", () => item.buy());
+      el.shop.appendChild(wrap);
+    });
+  }
+
+  // Save/Load
+  function save(){
+    const data = {
+      v: state.version,
+      money: state.money,
+      totalClicks: state.totalClicks,
+      clickPowerLevel: state.clickPowerLevel,
+      baseClick: state.baseClick,
+      premium: state.premium,
+      vip: state.vip,
+      lastSavedAt: Date.now()
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    state.lastSavedAt = data.lastSavedAt;
+    pingSaved(true);
+  }
+
+  function load(){
+    const raw = localStorage.getItem(SAVE_KEY);
+    if(!raw) return;
+    try{
+      const data = JSON.parse(raw);
+      state.money = data.money ?? 0;
+      state.totalClicks = data.totalClicks ?? 0;
+      state.clickPowerLevel = data.clickPowerLevel ?? 0;
+      state.baseClick = data.baseClick ?? 1;
+      state.premium = data.premium ?? 0;
+      state.vip = data.vip ?? 0;
+      state.lastSavedAt = data.lastSavedAt ?? 0;
+    }catch(e){
+      console.warn("Save load failed:", e);
+    }
+  }
+
+  let saveTimeout = null;
+  function pingSaved(isSaved){
+    // Debounced visual cue
+    clearTimeout(saveTimeout);
+    el.saveIndicator.classList.toggle("saved", !!isSaved);
+    el.saveIndicator.innerHTML = `<span class="dot"></span>${isSaved ? "Saved" : "Changes not saved"}`;
+    if (!isSaved){
+      saveTimeout = setTimeout(() => { save(); }, 1200);
+    }
+  }
+
+  // Render
+  function renderStats(){
+    el.money.textContent = fmt(state.money);
+    el.clickPower.textContent = clickPower();
+    el.multiplier.textContent = "x" + totalMultiplier().toFixed(2);
+    el.premCt.textContent = state.premium;
+    el.vipCt.textContent = state.vip;
+    el.gainPerClick.textContent = "+" + Math.floor(gainPerClick());
+  }
+
+  function renderRebirths(){
+    el.premCost.textContent = "Cost: " + fmt(premiumCost());
+    el.vipCost.textContent = "Cost: " + fmt(vipCost());
+    const canPrem = state.money >= premiumCost();
+    const canVip = state.money >= vipCost() && state.premium >= 1;
+    el.premBtn.disabled = !canPrem;
+    el.vipBtn.disabled = !canVip;
+  }
+
+  function renderAll(){
+    renderStats();
+    renderRebirths();
+    renderShop();
+  }
+
+  // Actions
+  function doClick(){
+    const gain = gainPerClick();
+    state.money += gain;
+    state.totalClicks++;
+    animateCube();
+    pingSaved(false);
+    renderStats();
+    renderRebirths();
+    // Allow Enter to quickly buy first upgrade if affordable
+  }
+
+  function animateCube(){
+    el.cube.classList.remove("spin");
+    void el.cube.offsetWidth; // reflow to restart animation
+    el.cube.classList.add("spin");
+  }
+
+  function doPremiumRebirth(){
+    if (state.money < premiumCost()) return;
+    state.premium += 1;
+    hardResetProgressKeepRebirths();
+  }
+
+  function doVipRebirth(){
+    if (state.premium < 1) return;
+    if (state.money < vipCost()) return;
+    state.vip += 1;
+    hardResetProgressKeepRebirths();
+  }
+
+  function hardResetProgressKeepRebirths(){
+    // Reset money and upgrades but keep rebirth counts
+    state.money = 0;
+    state.totalClicks = 0;
+    state.clickPowerLevel = 0;
+    pingSaved(false);
+    renderAll();
+  }
+
+  function fullReset(){
+    if (!confirm("This will erase ALL progress including Premium/VIP rebirths. Are you sure?")) return;
+    localStorage.removeItem(SAVE_KEY);
+    state.money = 0;
+    state.totalClicks = 0;
+    state.clickPowerLevel = 0;
+    state.baseClick = 1;
+    state.premium = 0;
+    state.vip = 0;
+    pingSaved(false);
+    renderAll();
+  }
+
+  // Keyboard shortcuts
+  function onKey(e){
+    if (e.code === "Space"){
+      e.preventDefault();
+      doClick();
+    } else if (e.code === "Enter"){
+      // Quick buy first upgrade if possible
+      const first = shopItems[0];
+      if (first && first.canBuy()) first.buy();
+    }
+  }
+
+  // Init
+  function init(){
+    load();
+    renderAll();
+
+    el.clickBtn.addEventListener("click", doClick);
+    el.cube.addEventListener("click", doClick);
+    el.cube.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); doClick(); }
+    });
+
+    el.premBtn.addEventListener("click", doPremiumRebirth);
+    el.vipBtn.addEventListener("click", doVipRebirth);
+
+    el.saveBtn.addEventListener("click", save);
+    el.resetBtn.addEventListener("click", fullReset);
+
+    document.addEventListener("keydown", onKey);
+
+    // Auto-save heartbeat as a safety net
+    setInterval(() => save(), 10000);
+
+    // Save on page unload
+    window.addEventListener("beforeunload", () => { try { save(); } catch(_){} });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
